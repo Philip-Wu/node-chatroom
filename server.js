@@ -3,6 +3,10 @@
  * websocket documentation: https://www.npmjs.com/package/ws#api-docs
  * classes: https://github.com/websockets/ws/blob/master/doc/ws.md
  * 
+ * Installing redis on windows using cygwin: 
+ * https://gist.github.com/pcan/44cb2177647f029d457facb31da0883f
+ * 
+ * 
  * Written by: Philip Wu
  * Email: wu.phil@gmail.com
  */
@@ -12,19 +16,26 @@
  */
 const WebSocket = require('ws');
 const url = require('url');
-const Arango = require('arangojs').Database;
+const redis = require("redis");
+    
+//const Arango = require('arangojs').Database;
 
 /**
  * Config
  */
-const arangoUsername = 'root';
-const arangoPassword = 'arango';
+//const arangoUsername = 'root';
+//const arangoPassword = 'arango';
+
+/**
+ * Functions
+ */
 
 /**
  * Init database connection to Arango
  * Documentation: https://www.arangodb.com/tutorials/tutorial-node-js/
  * https://github.com/arangodb/arangojs
- */ 
+ */
+/* 
 async function initArango() {
     var arangoUrl = 'http://'+arangoUsername+':'+arangoPassword+'@127.0.0.1:8529';
     console.log("initArango:", arangoUrl);
@@ -46,8 +57,27 @@ async function initArango() {
     await pCreate;
     
     return collection;  
-}
+}*/
 
+/**
+ * Init redis
+ */
+var subRedis = redis.createClient();
+var pubRedis = redis.createClient();
+subRedis.on("error", function (err) {
+    console.log("SubRedis Error " + err);
+});
+pubRedis.on("error", function (err) {
+    console.log("PubRedis Error " + err);
+});
+
+
+
+/**
+ * Code start 
+ */ 
+/*
+// Init arango
 var chatRoomCollection;
 initArango().then(function(collection) {
     console.log("initArango completed: ");
@@ -55,17 +85,13 @@ initArango().then(function(collection) {
 },
     err => console.error("Failed to init arango: ", err)
 );
-
+*/
 
  
-/**
- * Code start 
- */ 
+// Init websocket server
 var wssPort = 8888;
 const wss = new WebSocket.Server({ port: wssPort });
 console.log("WebSocketServer started on port %s", wssPort);
-// Attach map to server
-wss.chatRoomMap = new Map();
 
 
 /**
@@ -81,16 +107,21 @@ wss.on('connection', function connection(ws, req) {
     // Parse url parameters from request
     console.log('request url: '+req.url);
     const params = url.parse(req.url, true);
-    var chatRoom = params.chatRoom;
+    console.log('params: ', params);
+    var chatRoom = params.query.chatRoom;
     console.log('onConnection chatRoom: %s', chatRoom);
     
-    // Add ws to chatRoom map
-    if (wss.chatRoomMap.get(chatRoom)) {
-        wss.chatRoomMap.get(chatRoom).push(ws);
-    } else {
-        wss.chatRoomMap.set(chatRoom, [ws]);
-    }
-    console.log('onConnect chatRoomMap: %s', wss.chatRoomMap.get(chatRoom));
+    // Store chatRoom along with websocket
+    ws.chatRoom = chatRoom;
+    
+    // subscribe to chatRoom through Redis
+    subRedis.subscribe(chatRoom);
+    // Handle messages from redis. Simply pass message to websocket
+    subRedis.on("message", function(channel, message) {
+        console.log("redis msg received on channel: "+channel+" msg: "+message);  
+        ws.send(message);
+    });
+
     
     // Assign the key to the websocket
     var wsKey = req.headers['sec-websocket-key'];
@@ -102,7 +133,7 @@ wss.on('connection', function connection(ws, req) {
     
     // When a message is received broadcast to all websockets in chatRoom  
     ws.on('message', function incoming(payload) {        
-        console.log('received: %s', payload);    
+        console.log('websocket received: %s', payload);    
         try {    
             // Convert message to JSON
             var json = JSON.parse(payload);  
@@ -111,13 +142,7 @@ wss.on('connection', function connection(ws, req) {
             console.log('chatRoom: %s', chatRoom);
             
             // Broadcast message to all connections of chatroom
-            console.log('onMessage chatRoomMap: %s', wss.chatRoomMap.get(chatRoom));
-            if (message && wss.chatRoomMap.get(chatRoom)) {
-                wss.chatRoomMap.get(chatRoom).forEach( function(chatRoomWs) {
-                    console.log('broadcasting to: %s', ws.key);
-                    chatRoomWs.send(message);    
-                });
-            }
+            pubRedis.publish(chatRoom, message);
         } catch (err) {
             console.error('Caught exception %s', err);
             console.error('stacktrace: %s', err.stack);      

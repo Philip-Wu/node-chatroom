@@ -9,6 +9,7 @@
   "author": "Philip Wu",
   "license": "ISC",
   "dependencies": {
+    "redis": "^2.8.0",
     "ws": "^6.1.2"
   }
 }
