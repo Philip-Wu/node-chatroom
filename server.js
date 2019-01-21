@@ -118,8 +118,12 @@ wss.on('connection', function connection(ws, req) {
     subRedis.subscribe(chatRoom);
     // Handle messages from redis. Simply pass message to websocket
     subRedis.on("message", function(channel, message) {
-        console.log("redis msg received on channel: "+channel+" msg: "+message);  
-        ws.send(message);
+        console.log("redis msg received on channel: "+channel+" msg: "+message);
+        if (ws.readyState === WebSocket.OPEN) {  
+            ws.send(message);
+        } else {
+            console.error("Websocket already closed. Unable to send msg: ", message);
+        }
     });
 
     
