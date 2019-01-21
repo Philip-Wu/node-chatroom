@@ -43,8 +43,8 @@ async function initArango() {
     
     db.useDatabase('diggieDog');
     db.useBasicAuth('root', 'arango');
-    // TODO: Create chatRoom collection if it doesn't exist
-    var collection = db.collection('chatRoom');
+    // TODO: Create topic collection if it doesn't exist
+    var collection = db.collection('topic');
     console.log('db: ',db);
     
     var pCreate = collection.create();
@@ -78,10 +78,10 @@ pubRedis.on("error", function (err) {
  */ 
 /*
 // Init arango
-var chatRoomCollection;
+var topicCollection;
 initArango().then(function(collection) {
     console.log("initArango completed: ");
-    chatRoomCollection = collection;
+    topicCollection = collection;
 },
     err => console.error("Failed to init arango: ", err)
 );
@@ -95,10 +95,10 @@ console.log("WebSocketServer started on port %s", wssPort);
 
 
 /**
- * Link session, uid, ws_key to chatRoom
- * Each user will have a different ws per chatRoom
+ * Link session, uid, ws_key to topic
+ * Each user will have a different ws per topic
  * 
- * Map of chatRooms to a List of websockets
+ * Map of topics to a List of websockets
  *   
  */ 
 wss.on('connection', function connection(ws, req) {
@@ -108,14 +108,7 @@ wss.on('connection', function connection(ws, req) {
     console.log('request url: '+req.url);
     const params = url.parse(req.url, true);
     console.log('params: ', params);
-    var chatRoom = params.query.chatRoom;
-    console.log('onConnection chatRoom: %s', chatRoom);
     
-    // Store chatRoom along with websocket
-    ws.chatRoom = chatRoom;
-    
-    // subscribe to chatRoom through Redis
-    subRedis.subscribe(chatRoom);
     // Handle messages from redis. Simply pass message to websocket
     subRedis.on("message", function(channel, message) {
         console.log("redis msg received on channel: "+channel+" msg: "+message);
@@ -125,7 +118,6 @@ wss.on('connection', function connection(ws, req) {
             console.error("Websocket already closed. Unable to send msg: ", message);
         }
     });
-
     
     // Assign the key to the websocket
     var wsKey = req.headers['sec-websocket-key'];
@@ -133,20 +125,25 @@ wss.on('connection', function connection(ws, req) {
     console.log('websocket-key: %s', ws.key);  
     
     // A test message
-    ws.send('message is connected');
+    ws.send({'topic':'global', 'message': 'WebSocket connected'});
     
-    // When a message is received broadcast to all websockets in chatRoom  
+    // When a message is received broadcast to all websockets in topic  
     ws.on('message', function incoming(payload) {        
         console.log('websocket received: %s', payload);    
         try {    
             // Convert message to JSON
-            var json = JSON.parse(payload);  
-            var chatRoom = json.chatRoom;
-            var message = json.message;
-            console.log('chatRoom: %s', chatRoom);
-            
-            // Broadcast message to all connections of chatroom
-            pubRedis.publish(chatRoom, message);
+            var json = JSON.parse(payload);
+            var type = json.type;  
+            var topic = json.topic;
+            console.log('topic: %s', topic);
+            if (type == 'subscribe') {
+                // subscribe to topic through Redis
+                subRedis.subscribe(topic);                
+            } else if (type == 'message') {
+                // Broadcast message to all connections of topic                
+                var message = json.message;                
+                pubRedis.publish(topic, payload);                    
+            }
         } catch (err) {
             console.error('Caught exception %s', err);
             console.error('stacktrace: %s', err.stack);      
