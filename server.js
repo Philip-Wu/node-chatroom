@@ -125,7 +125,7 @@ wss.on('connection', function connection(ws, req) {
     console.log('websocket-key: %s', ws.key);  
     
     // A test message
-    ws.send({'topic':'global', 'message': 'WebSocket connected'});
+    ws.send(JSON.stringify({'topic':'global', 'message': 'WebSocket connected'}));
     
     // When a message is received broadcast to all websockets in topic  
     ws.on('message', function incoming(payload) {        
@@ -139,11 +139,10 @@ wss.on('connection', function connection(ws, req) {
             if (type == 'subscribe') {
                 // subscribe to topic through Redis
                 subRedis.subscribe(topic);                
-            } else if (type == 'message') {
-                // Broadcast message to all connections of topic                
-                var message = json.message;                
+            } else if (type == 'message' || type == 'invitation') {
+                // Broadcast message to all connections of topic                                
                 pubRedis.publish(topic, payload);                    
-            }
+            } 
         } catch (err) {
             console.error('Caught exception %s', err);
             console.error('stacktrace: %s', err.stack);      
