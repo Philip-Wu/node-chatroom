@@ -135,6 +135,8 @@ wss.on('connection', function connection(ws, req) {
             var json = JSON.parse(payload);
             var type = json.type;  
             var topic = json.topic;
+            var uid = json.uid;
+            var petIds = json.petIds;
             
             // Add timestamp to payload
             json.timestamp = new Date();
@@ -142,7 +144,10 @@ wss.on('connection', function connection(ws, req) {
             console.log('json: ', json);
             if (type == 'subscribe') {
                 // subscribe to topic through Redis
-                subRedis.subscribe(topic);                
+                subRedis.subscribe(topic);   
+                
+                // Broadcast to notify new user joined chat
+                pubRedis.publish(topic, JSON.stringify({'type': 'joinedChat', 'petIds':petIds, 'topic': topic}));             
             } else if (type == 'message' || type == 'invitation') {
                 // Broadcast message to all connections of topic                                
                 pubRedis.publish(topic, JSON.stringify(json));                    
