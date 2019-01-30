@@ -17,6 +17,9 @@
 const WebSocket = require('ws');
 const url = require('url');
 const redis = require("redis");
+const querystring = require('querystring');
+var http = require('http');
+var fs = require('fs');
     
 //const Arango = require('arangojs').Database;
 
@@ -152,6 +155,9 @@ wss.on('connection', function connection(ws, req) {
                 // Broadcast message to all connections of topic                                
                 pubRedis.publish(topic, JSON.stringify(json));                    
             } 
+            
+            // log payload
+            logPayload(JSON.stringify(json));
         } catch (err) {
             console.error('Caught exception %s', err);
             console.error('stacktrace: %s', err.stack);      
@@ -164,3 +170,27 @@ wss.on('connection', function connection(ws, req) {
       console.error('Caught exception %s', err);
   }
 });
+
+/**
+ * Log all received payloads
+ */
+function logPayload(payload) {
+    console.log('logPayload');
+    var postData = querystring.stringify({
+        'payload': payload,
+    });
+    
+    var postConfig = {host : 'localhost', port: 8080, 
+      path: '/chatPayload/savePayload', method: 'POST',
+      headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(postData)
+      }     
+    };
+    
+    var postRequest = http.request(postConfig, function(res) {
+        //console.log('res: ',res);
+    });
+    
+    postRequest.write(postData);
+}
