@@ -151,7 +151,7 @@ wss.on('connection', function connection(ws, req) {
                 
                 // Broadcast to notify new user joined chat
                 pubRedis.publish(topic, JSON.stringify({'type': 'joinedChat', 'petIds':petIds, 'topic': topic}));             
-            } else if (type == 'message' || type == 'invitation') {
+            } else if (type == 'message' || type == 'invitation' || type == 'cancelChat') {
                 // Broadcast message to all connections of topic                                
                 pubRedis.publish(topic, JSON.stringify(json));                    
             } 
