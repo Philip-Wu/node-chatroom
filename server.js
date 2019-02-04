@@ -148,15 +148,16 @@ wss.on('connection', function connection(ws, req) {
             if (type == 'subscribe') {
                 // subscribe to topic through Redis
                 subRedis.subscribe(topic);   
-                
+            }  
                 // Broadcast to notify new user joined chat
-                pubRedis.publish(topic, JSON.stringify({'type': 'joinedChat', 'petIds':petIds, 'topic': topic}));             
-            } else if (type == 'message' || type == 'invitation' || type == 'cancelChat') {
-                // Broadcast message to all connections of topic                                
-                pubRedis.publish(topic, JSON.stringify(json));                    
-            } 
+                //pubRedis.publish(topic, JSON.stringify({'type': 'joinedChat', 'petIds':petIds, 'topic': topic}));             
+            //} else if (type == 'message' || type == 'invitation' || type == 'cancelChat' || type == 'acceptedMarker') {
+                // Broadcast message to all connections of topic
+            console.log('broadcasting: ',json);                                
+            pubRedis.publish(topic, JSON.stringify(json));                    
+            //} 
             
-            // log payload
+            // log payload           
             logPayload(JSON.stringify(json));
         } catch (err) {
             console.error('Caught exception %s', err);
@@ -175,7 +176,7 @@ wss.on('connection', function connection(ws, req) {
  * Log all received payloads
  */
 function logPayload(payload) {
-    console.log('logPayload');
+    console.log('logPayload: ', payload);
     var postData = querystring.stringify({
         'payload': payload,
     });
@@ -189,7 +190,7 @@ function logPayload(payload) {
     };
     
     var postRequest = http.request(postConfig, function(res) {
-        //console.log('res: ',res);
+        console.log('logPayload response: ',res.statusCode);
     });
     
     postRequest.write(postData);
