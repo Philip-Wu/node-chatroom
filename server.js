@@ -21,13 +21,13 @@ const querystring = require('querystring');
 var http = require('http');
 var fs = require('fs');
     
-//const Arango = require('arangojs').Database;
+const Arango = require('arangojs').Database;
 
 /**
  * Config
  */
-//const arangoUsername = 'root';
-//const arangoPassword = 'arango';
+const arangoUsername = 'root';
+const arangoPassword = 'arango';
 
 /**
  * Functions
@@ -38,18 +38,21 @@ var fs = require('fs');
  * Documentation: https://www.arangodb.com/tutorials/tutorial-node-js/
  * https://github.com/arangodb/arangojs
  */
-/* 
-async function initArango() {
+
+function connectArango() {
     var arangoUrl = 'http://'+arangoUsername+':'+arangoPassword+'@127.0.0.1:8529';
     console.log("initArango:", arangoUrl);
     var db = new Arango(arangoUrl);
     
     db.useDatabase('diggieDog');
     db.useBasicAuth('root', 'arango');
-    // TODO: Create topic collection if it doesn't exist
-    var collection = db.collection('topic');
+
+    return db;
+/*
+    var userAuthCol = db.collection('UserAuth');
     console.log('db: ',db);
-    
+
+
     var pCreate = collection.create();
     pCreate.then(function() {
         console.log('Collection created');  
@@ -59,8 +62,10 @@ async function initArango() {
         
     await pCreate;
     
-    return collection;  
-}*/
+    
+    return userAuthCol;
+    */  
+}
 
 /**
  * Init redis
@@ -96,7 +101,6 @@ var wssPort = 8888;
 const wss = new WebSocket.Server({ port: wssPort });
 console.log("WebSocketServer started on port %s", wssPort);
 
-
 /**
  * Link session, uid, ws_key to topic
  * Each user will have a different ws per topic
@@ -104,18 +108,71 @@ console.log("WebSocketServer started on port %s", wssPort);
  * Map of topics to a List of websockets
  *   
  */ 
-wss.on('connection', function connection(ws, req) {
-  try {      
-  
+wss.on('connection', function connection(ws, req) {         
     // Parse url parameters from request
     console.log('request url: '+req.url);
     const params = url.parse(req.url, true);
     console.log('params: ', params);
+    const userId = params.query.userId;
+    const chatToken = params.query.chatToken;
+
+    // Validate connection based on chatToken
+    console.log('userId: ',userId);
+    console.log('chatToken:', chatToken);
+
+    authenticate({
+        webSocket: ws,
+        userId: parseInt(userId), 
+        chatToken: chatToken, 
+        success: initWebSocket,
+        denied: function(ws) {
+            console.log('Terminating websocket connection');
+            ws.terminate();
+        },
+        error: function(ws) {
+            ws.terminate();
+        }
+    });
+});
+
+/**
+ * Authenticate websocket connection
+ */
+function authenticate({webSocket, userId, chatToken, success, denied, error}) {
+    console.log('authenticate userId: ',userId);
+    connectArango().query({
+        query: "FOR ua IN UserAuth FILTER ua.userId==@userId RETURN ua",
+        bindVars: {userId: userId},
+    }).then(function(cursor) {
+        cursor.next().then(function(userAuth) {
+           console.log('userAuth: ', userAuth)
+           if (userAuth && userAuth.chatToken == chatToken && userAuth.userId.toString() == userId) {
+               console.log('access granted');
+               // execute the callback               
+               success(webSocket);
+           } else {
+               console.log('access denied.');
+               denied(webSocket);
+           }
+        });
+    }).catch(function(err){
+      console.error('failed to query arango for UserAuth');  
+      error(webSocket);
+    });        
+}
+
+function initWebSocket(ws) {
+    try {
+        
+    // Monitor websocket connections with heartbeats  
+    ws.isAlive = true;
+    ws.on('pong', heartbeat);  
     
     // Handle messages from redis. Simply pass message to websocket
     subRedis.on("message", function(channel, message) {
         console.log("redis msg received on channel: "+channel+" msg: "+message);
-        if (ws.readyState === WebSocket.OPEN) {  
+        if (ws.readyState === WebSocket.OPEN) {
+            console.log('websocket ready sending msg');  
             ws.send(message);
         } else {
             console.error("Websocket already closed. Unable to send msg: ", message);
@@ -123,9 +180,11 @@ wss.on('connection', function connection(ws, req) {
     });
     
     // Assign the key to the websocket
+    /*
     var wsKey = req.headers['sec-websocket-key'];
     ws.key = wsKey;
-    console.log('websocket-key: %s', ws.key);  
+    console.log('websocket-key: %s', ws.key);
+    */  
     
     // A test message
     ws.send(JSON.stringify({'topic':'global', 'message': 'WebSocket connected'}));
@@ -169,8 +228,8 @@ wss.on('connection', function connection(ws, req) {
     
   } catch (err) {
       console.error('Caught exception %s', err);
-  }
-});
+  }    
+}
 
 /**
  * Log all received payloads
@@ -195,3 +254,21 @@ function logPayload(payload) {
     
     postRequest.write(postData);
 }
+
+
+/** Periodically purge dead websocket connections 
+ * taken from: https://www.npmjs.com/package/ws#api-docs
+*/
+function noop() {}
+function heartbeat() {
+  this.isAlive = true;
+}
+ 
+const interval = setInterval(function ping() {
+  wss.clients.forEach(function each(ws) {
+    if (ws.isAlive === false) return ws.terminate();
+    console.log('purging dead websocket connection');
+    ws.isAlive = false;
+    ws.ping(noop);
+  });
+}, 30000);
