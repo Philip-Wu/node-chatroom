@@ -101,6 +101,11 @@ var wssPort = 8888;
 const wss = new WebSocket.Server({ port: wssPort });
 console.log("WebSocketServer started on port %s", wssPort);
 
+// TODO: move authentication code to request
+wss.on('request', function(req) {
+    console.log('onRequest');
+})
+
 /**
  * Link session, uid, ws_key to topic
  * Each user will have a different ws per topic
@@ -120,6 +125,12 @@ wss.on('connection', function connection(ws, req) {
     console.log('userId: ',userId);
     console.log('chatToken:', chatToken);
 
+    // Assign the key to the websocket    
+    var wsKey = req.headers['sec-websocket-key'];
+    ws.key = wsKey;
+    console.log('websocket-key: %s', ws.key);
+
+
     authenticate({
         webSocket: ws,
         userId: parseInt(userId), 
@@ -127,10 +138,11 @@ wss.on('connection', function connection(ws, req) {
         success: initWebSocket,
         denied: function(ws) {
             console.log('Terminating websocket connection');
-            ws.terminate();
+            //ws.terminate();
         },
         error: function(ws) {
-            ws.terminate();
+            console.log('Error')
+            //ws.terminate();
         }
     });
 });
@@ -156,7 +168,7 @@ function authenticate({webSocket, userId, chatToken, success, denied, error}) {
            }
         });
     }).catch(function(err){
-      console.error('failed to query arango for UserAuth');  
+      console.error('failed to query arango for UserAuth: ',err);  
       error(webSocket);
     });        
 }
@@ -166,7 +178,7 @@ function initWebSocket(ws) {
         
     // Monitor websocket connections with heartbeats  
     ws.isAlive = true;
-    ws.on('pong', heartbeat);  
+    //ws.on('pong', heartbeat);  
     
     // Handle messages from redis. Simply pass message to websocket
     subRedis.on("message", function(channel, message) {
@@ -179,14 +191,10 @@ function initWebSocket(ws) {
         }
     });
     
-    // Assign the key to the websocket
-    /*
-    var wsKey = req.headers['sec-websocket-key'];
-    ws.key = wsKey;
-    console.log('websocket-key: %s', ws.key);
-    */  
+      
     
     // A test message
+    console.log('sending test message');
     ws.send(JSON.stringify({'topic':'global', 'message': 'WebSocket connected'}));
     
     // When a message is received broadcast to all websockets in topic  
@@ -228,6 +236,7 @@ function initWebSocket(ws) {
     
   } catch (err) {
       console.error('Caught exception %s', err);
+      console.trace();
   }    
 }
 
@@ -263,12 +272,24 @@ function noop() {}
 function heartbeat() {
   this.isAlive = true;
 }
- 
+
+ /*
 const interval = setInterval(function ping() {
+  var removalKeys = new Set();  
+    
   wss.clients.forEach(function each(ws) {
-    if (ws.isAlive === false) return ws.terminate();
-    console.log('purging dead websocket connection');
-    ws.isAlive = false;
-    ws.ping(noop);
+    if (ws.isAlive === false) {
+        console.log('purging dead websocket connection');        
+        ws.terminate();
+        // track the key for removal
+        removalKeys.add(ws.key);
+    } else {    
+        ws.isAlive = false;
+        ws.ping(noop);
+    }
   });
+  
+  // TODO: Clean up any terminated ws
+  
 }, 30000);
+*/
