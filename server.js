@@ -184,7 +184,7 @@ function initWebSocket(ws) {
     subRedis.on("message", function(channel, message) {
         console.log("redis msg received on channel: "+channel+" msg: "+message);
         if (ws.readyState === WebSocket.OPEN) {
-            console.log('websocket ready sending msg');  
+            console.log('websocket ready sending msg to %s', ws.key);  
             ws.send(message);
         } else {
             console.error("Websocket already closed. Unable to send msg: ", message);
@@ -199,7 +199,7 @@ function initWebSocket(ws) {
     
     // When a message is received broadcast to all websockets in topic  
     ws.on('message', function incoming(payload) {        
-        console.log('websocket received: %s', payload);    
+        console.log('websocket (%s) received: %s', ws.key, payload);    
         try {    
             // Convert message to JSON
             var json = JSON.parse(payload);
@@ -220,7 +220,7 @@ function initWebSocket(ws) {
                 //pubRedis.publish(topic, JSON.stringify({'type': 'joinedChat', 'petIds':petIds, 'topic': topic}));             
             //} else if (type == 'message' || type == 'invitation' || type == 'cancelChat' || type == 'acceptedMarker') {
                 // Broadcast message to all connections of topic
-            console.log('broadcasting: ',json);                                
+            //console.log('broadcasting: ',json);                                
             pubRedis.publish(topic, JSON.stringify(json));                    
             //} 
             
