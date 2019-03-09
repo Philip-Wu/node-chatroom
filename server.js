@@ -18,6 +18,7 @@ const WebSocket = require('ws');
 const url = require('url');
 const redis = require("redis");
 const querystring = require('querystring');
+const config = require('./config.json');
 var http = require('http');
 var fs = require('fs');
     
@@ -26,8 +27,9 @@ const Arango = require('arangojs').Database;
 /**
  * Config
  */
-const arangoUsername = 'root';
-const arangoPassword = 'arango';
+const arangoUsername = config.arango.username;
+const arangoPassword = config.arango.password;
+const arangoIp = config.arango.ip;
 
 /**
  * Functions
@@ -40,12 +42,12 @@ const arangoPassword = 'arango';
  */
 
 function connectArango() {
-    var arangoUrl = 'http://'+arangoUsername+':'+arangoPassword+'@127.0.0.1:8529';
+    var arangoUrl = 'http://'+arangoUsername+':'+arangoPassword+'@'+arangoIp+':8529';
     console.log("initArango:", arangoUrl);
     var db = new Arango(arangoUrl);
     
-    db.useDatabase('diggieDog');
-    db.useBasicAuth('root', 'arango');
+    db.useDatabase(config.arango.database);
+    db.useBasicAuth(arangoUsername, arangoPassword);
 
     return db;
 /*
