@@ -68,6 +68,13 @@ function connectArango() {
 }
 
 /**
+ * Connects to the ChatPayload collection
+ */
+function arangoChatPayload() {
+    return connectArango().collection('ChatPayload');
+}
+
+/**
  * Init redis
  */
 var subRedis = redis.createClient();
@@ -245,6 +252,34 @@ function initWebSocket(ws) {
  */
 function logPayload(payload) {
     console.log('logPayload: ', payload);
+    var jsonPayload = JSON.parse(payload);
+    
+    var now = new Date();
+    var timestamp = now.getUTCFullYear() + "-"
+        + ("0"+now.getUTCMonth()).slice(-2)
+        + "-" + ("0"+now.getUTCDay()).slice(-2)
+        + " "+("0"+now.getUTCHours()).slice(-2)
+        + ":"+("0"+now.getUTCMinutes()).slice(-2)
+        + ":"+("0"+now.getUTCSeconds()).slice(-2);
+        
+    console.log('logPayload timestamp: '+timestamp);
+    console.log('chatRoomId: '+jsonPayload.chatRoomId);
+    if (jsonPayload.chatRoomId) {
+        console.log('saving chat payload');
+        var chatPayload = {
+            payload: jsonPayload,
+            chatRoomId: jsonPayload.chatRoomId,
+            timestamp: timestamp,
+        }
+        
+        arangoChatPayload().save(chatPayload).then(
+            () => console.log('ChatPayload saved?'),
+          meta => console.log('ChatPayload saved: ', meta._rev),
+          err => console.error("Failed to save ChatPayload to arango: ", err)  
+        );
+    }      
+    
+    /*
     var postData = querystring.stringify({
         'payload': payload,
     });
@@ -262,6 +297,7 @@ function logPayload(payload) {
     });
     
     postRequest.write(postData);
+    */
 }
 
 
