@@ -6,6 +6,8 @@
  * Installing redis on windows using cygwin: 
  * https://gist.github.com/pcan/44cb2177647f029d457facb31da0883f
  * 
+ * Configuring firebase with node.js: https://firebase.google.com/docs/admin/setup
+ * https://firebase.google.com/docs/cloud-messaging/send-message
  * 
  * Written by: Philip Wu
  * Email: wu.phil@gmail.com
@@ -20,9 +22,16 @@ const redis = require("redis");
 const querystring = require('querystring');
 const config = require('./config.json');
 var http = require('http');
-var fs = require('fs');
-    
+var fs = require('fs');    
 const Arango = require('arangojs').Database;
+const firebase = require("firebase-admin");
+const firebaseServiceAccount = require("./pawpal-38a88-firebase-adminsdk-j40hz-d1835dd85c.json");
+
+firebase.initializeApp({
+  credential: firebase.credential.cert(firebaseServiceAccount),
+  databaseURL: "https://pawpal-38a88.firebaseio.com"
+});
+
 
 /**
  * Config
@@ -187,7 +196,7 @@ function initWebSocket(ws) {
         
     // Monitor websocket connections with heartbeats  
     ws.isAlive = true;
-    //ws.on('pong', heartbeat);  
+    ws.on('pong', heartbeat);  
     
     // Handle messages from redis. Simply pass message to websocket
     subRedis.on("message", function(channel, message) {
@@ -197,6 +206,7 @@ function initWebSocket(ws) {
             ws.send(message);
         } else {
             console.error("Websocket already closed. Unable to send msg: ", message);
+            // TODO: Should we terminate the websocket?
         }
     });
     
@@ -224,7 +234,23 @@ function initWebSocket(ws) {
             if (type == 'subscribe') {
                 // subscribe to topic through Redis
                 subRedis.subscribe(topic);   
-            }  
+            } else if (type == 'message') {
+                var firebaseMsg = {
+                    topic: topic,
+                    notification: {
+                        title: 'PawPal message received',
+                        body: json.message
+                    }
+                }
+                
+                firebase.messaging().send(firebaseMsg).then((response) => {
+                    // Response is a message ID string.
+                    console.log('firebase successfully sent message:', response);                    
+                }).catch((error) => {
+                    console.log('firebase error sending message:', error);
+                });
+                                
+            }                          
                 // Broadcast to notify new user joined chat
                 //pubRedis.publish(topic, JSON.stringify({'type': 'joinedChat', 'petIds':petIds, 'topic': topic}));             
             //} else if (type == 'message' || type == 'invitation' || type == 'cancelChat' || type == 'acceptedMarker') {
@@ -232,6 +258,8 @@ function initWebSocket(ws) {
             //console.log('broadcasting: ',json);                                
             pubRedis.publish(topic, JSON.stringify(json));                    
             //} 
+            
+            // Also broadcast via firebase
             
             // log payload           
             logPayload(JSON.stringify(json));
@@ -280,26 +308,6 @@ function logPayload(payload) {
           err => console.error("Failed to save ChatPayload to arango: ", err)  
         );
     }      
-    
-    /*
-    var postData = querystring.stringify({
-        'payload': payload,
-    });
-    
-    var postConfig = {host : 'localhost', port: 8080, 
-      path: '/chatPayload/savePayload', method: 'POST',
-      headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Content-Length': Buffer.byteLength(postData)
-      }     
-    };
-    
-    var postRequest = http.request(postConfig, function(res) {
-        console.log('logPayload response: ',res.statusCode);
-    });
-    
-    postRequest.write(postData);
-    */
 }
 
 
@@ -311,7 +319,7 @@ function heartbeat() {
   this.isAlive = true;
 }
 
- /*
+ 
 const interval = setInterval(function ping() {
   var removalKeys = new Set();  
     
@@ -328,6 +336,11 @@ const interval = setInterval(function ping() {
   });
   
   // TODO: Clean up any terminated ws
+  for( var i = 0; i < wss.clients.length; i++){ 
+   if (removalKeys.has(wss.clients[i].key)) {
+       console.log('splicing');
+     wss.clients.splice(i, 1); 
+   }
+}
   
 }, 30000);
-*/
