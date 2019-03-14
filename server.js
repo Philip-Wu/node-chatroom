@@ -218,7 +218,8 @@ function initWebSocket(ws) {
     
     // When a message is received broadcast to all websockets in topic  
     ws.on('message', function incoming(payload) {        
-        console.log('websocket (%s) received: %s', ws.key, payload);    
+        console.log('websocket (%s) received: %s', ws.key, payload);  
+          
         try {    
             // Convert message to JSON
             var json = JSON.parse(payload);
@@ -227,42 +228,32 @@ function initWebSocket(ws) {
             var uid = json.uid;
             var petIds = json.petIds;
             
-            // Add timestamp to payload
-            json.timestamp = new Date();
-            
-            console.log('json: ', json);
-            if (type == 'subscribe') {
-                // subscribe to topic through Redis
-                subRedis.subscribe(topic);   
-            } else if (type == 'message') {
-                var firebaseMsg = {
-                    topic: topic,
-                    notification: {
-                        title: 'PawPal message received',
-                        body: json.message
-                    }
-                }
+            if (topic) {                        
+                // Add timestamp to payload
+                json.timestamp = new Date();
                 
-                firebase.messaging().send(firebaseMsg).then((response) => {
-                    // Response is a message ID string.
-                    console.log('firebase successfully sent message:', response);                    
-                }).catch((error) => {
-                    console.log('firebase error sending message:', error);
-                });
-                                
-            }                          
-                // Broadcast to notify new user joined chat
-                //pubRedis.publish(topic, JSON.stringify({'type': 'joinedChat', 'petIds':petIds, 'topic': topic}));             
-            //} else if (type == 'message' || type == 'invitation' || type == 'cancelChat' || type == 'acceptedMarker') {
-                // Broadcast message to all connections of topic
-            //console.log('broadcasting: ',json);                                
-            pubRedis.publish(topic, JSON.stringify(json));                    
-            //} 
-            
-            // Also broadcast via firebase
-            
-            // log payload           
-            logPayload(JSON.stringify(json));
+                console.log('json: ', json);
+                if (type == 'subscribe') {
+                    // subscribe to topic through Redis
+                    subRedis.subscribe(topic);   
+                } else if (type == 'message') {
+                    sendFirebaseMessage(topic, 'PawPal message received', json.message, json.chatRoomId);
+                } else if (type == 'invitation') {
+                    sendFirebaseMessage(topic, 'PawPal invitation received', json.message, json.chatRoomId);                                
+                }                          
+                    // Broadcast to notify new user joined chat
+                    //pubRedis.publish(topic, JSON.stringify({'type': 'joinedChat', 'petIds':petIds, 'topic': topic}));             
+                //} else if (type == 'message' || type == 'invitation' || type == 'cancelChat' || type == 'acceptedMarker') {
+                    // Broadcast message to all connections of topic
+                //console.log('broadcasting: ',json);                                
+                pubRedis.publish(topic, JSON.stringify(json));                    
+                //} 
+                
+                // Also broadcast via firebase
+                
+                // log payload           
+                logPayload(JSON.stringify(json));
+            }
         } catch (err) {
             console.error('Caught exception %s', err);
             console.error('stacktrace: %s', err.stack);      
@@ -275,6 +266,28 @@ function initWebSocket(ws) {
       console.error('Caught exception %s', err);
       console.trace();
   }    
+}
+
+function sendFirebaseMessage(topic, title, body, chatRoomId) {
+    console.log('topic: '+topic);
+    var firebaseMsg = {
+        topic: topic,
+        notification: {
+            title: title,
+            body: body
+        },
+        data: {
+            chatRoomId: chatRoomId,
+        }
+    }
+    
+    firebase.messaging().send(firebaseMsg).then((response) => {
+        // Response is a message ID string.
+        console.log('firebase successfully sent message:', response);                    
+    }).catch((error) => {
+        console.log('firebase error sending message:', error);
+    });    
+    
 }
 
 /**
