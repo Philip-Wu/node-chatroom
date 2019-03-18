@@ -237,9 +237,9 @@ function initWebSocket(ws) {
                     // subscribe to topic through Redis
                     subRedis.subscribe(topic);   
                 } else if (type == 'message') {
-                    sendFirebaseMessage(topic, 'PawPal message received', json.message, json.chatRoomId);
+                    sendFirebaseMessage(topic, 'PawPal message received', json.message, json.chatRoomId, uid);
                 } else if (type == 'invitation') {
-                    sendFirebaseMessage(topic, 'PawPal invitation received', json.message, json.chatRoomId);                                
+                    sendFirebaseMessage(topic, 'PawPal invitation received', json.message, json.chatRoomId, uid);                                
                 }                          
                     // Broadcast to notify new user joined chat
                     //pubRedis.publish(topic, JSON.stringify({'type': 'joinedChat', 'petIds':petIds, 'topic': topic}));             
@@ -268,8 +268,8 @@ function initWebSocket(ws) {
   }    
 }
 
-function sendFirebaseMessage(topic, title, body, chatRoomId) {
-    console.log('topic: '+topic);
+function sendFirebaseMessage(topic, title, body, chatRoomId, uid) {
+    console.log('firebase topic: '+topic+" uid: "+uid);
     var firebaseMsg = {
         topic: topic,
         notification: {
@@ -278,9 +278,13 @@ function sendFirebaseMessage(topic, title, body, chatRoomId) {
         },
         data: {
             chatRoomId: chatRoomId,
+            uid: uid.toString(),                        
+            click_action: 'FLUTTER_NOTIFICATION_CLICK',
+            sound: 'default',
         }
     }
     
+    console.log('firebase payload:' +JSON.stringify(firebaseMsg));
     firebase.messaging().send(firebaseMsg).then((response) => {
         // Response is a message ID string.
         console.log('firebase successfully sent message:', response);                    
