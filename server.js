@@ -86,6 +86,13 @@ function arangoChatPayload() {
 }
 
 /**
+ * Connects to the ChatPayload collection
+ */
+function arangoChatRoom() {
+    return connectArango().collection('ChatRoom');
+}
+
+/**
  * Init redis
  */
 var subRedis = redis.createClient();
@@ -191,6 +198,49 @@ function authenticate({webSocket, userId, chatToken, success, denied, error}) {
     });        
 }
 
+/**
+ * chatRoom callback function
+ */
+function getChatRoom({chatRoomId, callback}) {
+    console.log('getChatRoom '+chatRoomId);
+    connectArango().query({
+        query: "FOR cr IN ChatRoom FILTER cr._key == @chatRoomId RETURN cr",
+        bindVars: {chatRoomId: chatRoomId},
+    }).then(function(cursor) {
+        cursor.next().then( function(chatRoom) {
+            console.log('chatRoom: '+JSON.stringify(chatRoom));
+            if (chatRoom) {
+                callback(chatRoom);
+            }
+        });
+    }).catch(function(err) {
+      console.error('failed to query arango for ChatRoom: ',err);  
+      //err(err);        
+    });   
+}
+
+/**
+ * Update the chatRoom with the GPS location
+ */
+function setChatRoomLocation({chatRoom, longitude, latitude}) {
+    if (chatRoom) {
+        var coords = {
+            coordinates: [longitude, latitude],
+            type: 'Point',
+        };
+
+        chatRoom.location = coords;
+        
+        // save to arango
+        arangoChatRoom().update(chatRoom['_id'], chatRoom).then(
+            () => console.log('ChatRoom updated'),
+          meta => console.log('ChatRoom updated: ', meta._rev),
+          err => console.error("Failed to save ChatRoom to arango: ", err)  
+        );
+        
+    }       
+}
+
 function initWebSocket(ws) {
     try {
         
@@ -240,7 +290,19 @@ function initWebSocket(ws) {
                     sendFirebaseMessage(topic, 'PawPal message received', json.message, json.chatRoomId, uid);
                 } else if (type == 'invitation') {
                     sendFirebaseMessage(topic, 'PawPal invitation received', json.message, json.chatRoomId, uid);                                
-                }                          
+                } else if (type == 'acceptInvitation') {
+                    // Save gps location to database
+                    getChatRoom({
+                       chatRoomId: json.chatRoomId,
+                       callback: function(chatRoom) {
+                        setChatRoomLocation({
+                            chatRoom: chatRoom,
+                            longitude: json.longitude,
+                            latitude: json.latitude,
+                        });
+                       } 
+                    });
+                }                         
                     // Broadcast to notify new user joined chat
                     //pubRedis.publish(topic, JSON.stringify({'type': 'joinedChat', 'petIds':petIds, 'topic': topic}));             
                 //} else if (type == 'message' || type == 'invitation' || type == 'cancelChat' || type == 'acceptedMarker') {
