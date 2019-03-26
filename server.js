@@ -336,7 +336,8 @@ function sendFirebaseMessage(topic, title, body, chatRoomId, uid) {
         topic: topic,
         notification: {
             title: title,
-            body: body
+            body: body,
+            sound: 'default',
         },
         data: {
             chatRoomId: chatRoomId,
