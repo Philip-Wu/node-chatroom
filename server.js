@@ -364,9 +364,14 @@ function logPayload(payload) {
     var jsonPayload = JSON.parse(payload);
     
     var now = new Date();
+    console.log('now: ', now);
+    console.log('utc month: ', now.getUTCMonth());
+    console.log('utc day: ', now.getUTCDate());
+    console.log('utc day zeroed:', ("0"+now.getUTCDate()));
+    // TODO: Fix timestamp
     var timestamp = now.getUTCFullYear() + "-"
-        + ("0"+now.getUTCMonth()).slice(-2)
-        + "-" + ("0"+now.getUTCDay()).slice(-2)
+        + ("0"+(now.getUTCMonth()+1)).slice(-2)
+        + "-" + ("0"+now.getUTCDate()).slice(-2)
         + " "+("0"+now.getUTCHours()).slice(-2)
         + ":"+("0"+now.getUTCMinutes()).slice(-2)
         + ":"+("0"+now.getUTCSeconds()).slice(-2);
