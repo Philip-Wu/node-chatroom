@@ -336,15 +336,26 @@ function sendFirebaseMessage(topic, title, body, chatRoomId, uid) {
         topic: topic,
         notification: {
             title: title,
-            body: body,
-            sound: 'default',
+            body: body,           
         },
         data: {
             chatRoomId: chatRoomId,
             uid: uid.toString(),                        
             click_action: 'FLUTTER_NOTIFICATION_CLICK',
             sound: 'default',
-        }
+        },
+        android: {
+            notification: {
+                sound: "default"
+            }
+        },
+        apns: {
+            payload: {
+                aps: {
+                    sound: "default"
+                }
+            }
+        }        
     }
     
     console.log('firebase payload:' +JSON.stringify(firebaseMsg));
