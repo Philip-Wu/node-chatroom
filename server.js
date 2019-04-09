@@ -283,13 +283,34 @@ function initWebSocket(ws) {
                 json.timestamp = new Date();
                 
                 console.log('json: ', json);
+                var logPayloadCallback;
                 if (type == 'subscribe') {
                     // subscribe to topic through Redis
                     subRedis.subscribe(topic);   
+                } else if (type == 'cancelChat') {
+                    subRedis.unsubscribe(topic);                    
                 } else if (type == 'message') {
-                    sendFirebaseMessage(topic, 'PawPal message received', json.message, json.chatRoomId, uid);
+                    logPayloadCallback = function (docMeta) {
+                        sendFirebaseMessage({
+                            topic: topic, 
+                            title: 'PawPal message received', 
+                            body: json.message, 
+                            chatRoomId: json.chatRoomId, 
+                            uid: uid,
+                            payloadId: docMeta._key,
+                        });
+                    }
                 } else if (type == 'invitation') {
-                    sendFirebaseMessage(topic, 'PawPal invitation received', json.message, json.chatRoomId, uid);                                
+                    logPayloadCallback = function (docMeta) {
+                        sendFirebaseMessage({
+                            topic: topic, 
+                            title: 'PawPal invitation received', 
+                            body: json.message, 
+                            chatRoomId: json.chatRoomId, 
+                            uid: uid,
+                            payloadId: docMeta._key,
+                        });
+                    }                                
                 } else if (type == 'acceptInvitation') {
                     // Save gps location to database
                     getChatRoom({
@@ -314,7 +335,7 @@ function initWebSocket(ws) {
                 // Also broadcast via firebase
                 
                 // log payload           
-                logPayload(JSON.stringify(json));
+                logPayload({payload: JSON.stringify(json), callback: logPayloadCallback});
             }
         } catch (err) {
             console.error('Caught exception %s', err);
@@ -330,7 +351,7 @@ function initWebSocket(ws) {
   }    
 }
 
-function sendFirebaseMessage(topic, title, body, chatRoomId, uid) {
+function sendFirebaseMessage({topic, title, body, chatRoomId, uid, payloadId}) {
     console.log('firebase topic: '+topic+" uid: "+uid);
     var firebaseMsg = {
         topic: topic,
@@ -340,6 +361,7 @@ function sendFirebaseMessage(topic, title, body, chatRoomId, uid) {
         },
         data: {
             chatRoomId: chatRoomId,
+            payloadId: payloadId.toString(),
             uid: uid.toString(),                        
             click_action: 'FLUTTER_NOTIFICATION_CLICK',
             sound: 'default',
@@ -371,7 +393,7 @@ function sendFirebaseMessage(topic, title, body, chatRoomId, uid) {
 /**
  * Log all received payloads
  */
-function logPayload(payload) {
+function logPayload({payload, callback}) {
     console.log('logPayload: ', payload);
     var jsonPayload = JSON.parse(payload);
     
@@ -399,8 +421,14 @@ function logPayload(payload) {
         }
         
         arangoChatPayload().save(chatPayload).then(
-            () => console.log('ChatPayload saved?'),
-          meta => console.log('ChatPayload saved: ', meta._rev),
+            //() => console.log('ChatPayload saved?'),
+          meta => { 
+              console.log('ChatPayload saved: ', meta._key);
+              if (callback != null) {
+                  console.log('Calling log payload callback');
+                  callback(meta);
+              } 
+          },
           err => console.error("Failed to save ChatPayload to arango: ", err)  
         );
     }      
